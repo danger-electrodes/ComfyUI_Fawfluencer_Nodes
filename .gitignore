@@ -1,0 +1,4 @@
+fawfulized_nodes/models/
+**/__pycache__/
+*.pyc
+*.pyo
