@@ -6,7 +6,7 @@ from server import PromptServer
 import comfy.model_management
 import gc
 import time
-from memory_profiler import profile
+#from memory_profiler import profile
 import subprocess
 import sys
 
@@ -261,7 +261,7 @@ class FawfluxencerNode:
         applied_ipadapter_model = model_management_utilities.apply_ip_adapter(details_model, details_ip_adapter_model, details_clip_vision_model, image, strength, start_at, end_at, "standard", None, base_model_type)
         return applied_ipadapter_model
     
-    @profile
+    #@profile
     def generate(self, **kwargs):
 
         images = []
