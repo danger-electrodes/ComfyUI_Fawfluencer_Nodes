@@ -336,6 +336,133 @@ PROMPT_CUSTOM_DATAS = {
     "additional_widgets" : []
 }
 
+
+########################################################
+#####################[IMG 2 IMG]########################
+########################################################
+
+IMG2IMG_FOLDER_CUSTOM_DATAS = {
+    "widget_template" : "folder_upload",
+    "is_optional" : False,
+    "additional_widgets" : [   
+        {
+            "type" : "number",
+            "name" : "mask_grow_by",
+            "label" : "grow mask by :",
+            "defaultValue": 5,
+            "options": {
+                "min": 0,
+                "max": 20,
+                "precision": 0,
+                "step": 1,
+            }
+        },
+        {
+            "type" : "number",
+            "name" : "mask_blur_size",
+            "label" : "mask blur size :",
+            "defaultValue": 5.5,
+            "options": {
+                "min": 0,
+                "max": 30,
+                "precision": 2,
+                "step": 0.5,
+            }
+        },
+        {
+            "type" : "string",
+            "name" : "target_folder",
+            "label" : "target folder :",
+            "force_hidden" : True,
+            "defaultValue" : "img_to_img_folder"
+        }
+    ]
+}
+
+IMG2IMG_INFLUENCER_FACE_CUSTOM_DATAS = {
+    "widget_template" : "file_upload",
+    "is_optional" : False,
+    "additional_widgets" : [
+                        {
+                            "type" : "combo",
+                            "name" : "insight_face_provider",
+                            "label" : "provider for insightface :",
+                            "defaultValue": "CPU",
+                            "options": {
+                                "values": ["CPU", "CUDA", "ROCM"]
+                            }
+                        },
+                        {
+                            "type" : "number",
+                            "name" : "instantid_strength",
+                            "label" : "instantid strength :",
+                            "defaultValue": 0.90,
+                            "options": {
+                                "min": 0.00,
+                                "max": 1.00,
+                                "precision": 2,
+                                "step": 0.01,
+                            }
+                        },
+                        {
+                            "type" : "number",
+                            "name" : "instantid_cnet_strength",
+                            "label" : "instantid controlnet strength :",
+                            "defaultValue": 0.30,
+                            "options": {
+                                "min": 0.00,
+                                "max": 1.00,
+                                "precision": 2,
+                                "step": 0.01,
+                            }
+                        },
+                        {
+                            "type" : "number",
+                            "name" : "ip_strength",
+                            "label" : "ip adapter strength :",
+                            "defaultValue": 0.30,
+                            "options": {
+                                "min": 0.00,
+                                "max": 1.00,
+                                "precision": 2,
+                                "step": 0.01,
+                            }
+                        },
+                        {
+                            "type" : "combo",
+                            "name" : "instantid_combine_embeddings",
+                            "label" : "instantid combine embeddings :",
+                            "defaultValue": "average",
+                            "options": {
+                                "values": ["average", "norm average", "concat"]
+                            }
+                        },
+                        {
+                            "type" : "number",
+                            "name" : "insight_face_input_width",
+                            "label" : "insightface input width :",
+                            "defaultValue": 640,
+                            "options": {
+                                "min": 0,
+                                "max": 1024,
+                                "precision": 0,
+                                "step": 1,
+                            }
+                        },
+                        {
+                            "type" : "number",
+                            "name" : "insight_face_input_height",
+                            "label" : "insightface input height :",
+                            "defaultValue": 640,
+                            "options": {
+                                "min": 0,
+                                "max": 1024,
+                                "precision": 0,
+                                "step": 1,
+                            }
+                        },
+                    ]
+}
 """Maps EXIF tags to tag names."""
 REV_TAGS = {value: key for key, value in ExifTags.TAGS.items()}
 

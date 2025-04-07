@@ -1,15 +1,7 @@
 import folder_paths
 import os
-import torch
 import comfy.samplers
 from server import PromptServer
-import comfy.model_management
-import gc
-import time
-#from memory_profiler import profile
-import subprocess
-import sys
-
 # UTILITIES IMPORTS
 from .utilities import sampling as sampling_utilities
 from .utilities import image as image_utilities
@@ -21,12 +13,6 @@ from .control_nets.control_nets_preprocessors import try_process_image as proces
 
 # CONSTANTS IMPORTS
 from .constants import ASPECT_RATIOS, CONTROL_NET_CUSTOM_DATAS, INFLUENCER_FACE_CUSTOM_DATAS, INFLUENCER_BODY_CUSTOM_DATAS, BACKGROUND_CUSTOM_DATAS, PROMPT_CUSTOM_DATAS, BBOX_MODELS
-
-#we need to upgrade protobuf otherwise insightface take its holy time to load
-def upgrade_protobuf():
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "protobuf"])
-
-upgrade_protobuf()
 
 def get_dimensions(resolution):
     dimensions = resolution.split(' ')[0]
@@ -45,7 +31,7 @@ def get_widget_value(kwargs, widget_name):
 
 def set_widget_value(kwargs, widget_name, type, value):
     id = kwargs['unique_id']
-    PromptServer.instance.send_sync("fawfulized-feedback", {"node_id": id, "widget_name": widget_name, "type": type, "value": value})
+    PromptServer.instance.send_sync("fawfulized-prompt-update", {"node_id": id, "widget_name": widget_name, "type": type, "value": value})
 
 class FawfluxencerNode:
 

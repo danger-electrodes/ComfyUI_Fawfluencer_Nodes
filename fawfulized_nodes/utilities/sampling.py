@@ -10,6 +10,54 @@ import numpy as np
 import gc 
 import copy
 
+def prepare_noise_scaled(latent_image, seed, scale, noise_inds=None):
+    """
+    creates random noise given a latent image and a seed.
+    optional arg skip can be used to skip and discard x number of noise generations for a given seed
+    """
+    generator = torch.manual_seed(seed)
+    if noise_inds is None:
+        noise = torch.randn(latent_image.size(), dtype=latent_image.dtype, layout=latent_image.layout, generator=generator, device="cpu")
+        return noise * scale
+
+    unique_inds, inverse = np.unique(noise_inds, return_inverse=True)
+    noises = []
+    for i in range(unique_inds[-1]+1):
+        noise = torch.randn([1] + list(latent_image.size())[1:], dtype=latent_image.dtype, layout=latent_image.layout, generator=generator, device="cpu")
+        if i in unique_inds:
+            noises.append(noise)
+    noises = [noises[i] for i in inverse]
+    noises = torch.cat(noises, axis=0)
+    return noises * scale
+
+class Noise_RandomNoise_Scaled:
+    def __init__(self, seed, scale):
+        self.seed = seed
+        self.scale = scale
+
+    def generate_noise(self, input_latent):
+        latent_image = input_latent["samples"]
+        batch_inds = input_latent["batch_index"] if "batch_index" in input_latent else None
+        return prepare_noise_scaled(latent_image, self.seed, self.scale, batch_inds)
+    
+class Noise_EmptyNoise:
+    def __init__(self):
+        self.seed = 0
+
+    def generate_noise(self, input_latent):
+        latent_image = input_latent["samples"]
+        return torch.zeros(latent_image.shape, dtype=latent_image.dtype, layout=latent_image.layout, device="cpu")
+
+
+class Noise_RandomNoise:
+    def __init__(self, seed):
+        self.seed = seed
+
+    def generate_noise(self, input_latent):
+        latent_image = input_latent["samples"]
+        batch_inds = input_latent["batch_index"] if "batch_index" in input_latent else None
+        return comfy.sample.prepare_noise(latent_image, self.seed, batch_inds)
+    
 def zero_out(conditionning):
     negative = []
     for t in conditionning:
@@ -193,15 +241,52 @@ def get_lying_sampler(sampler, dishonesty_factor, start, end):
     lying_sampler = KSAMPLER(lying_sigma_sampler, extra_options=extra_options,)
     return lying_sampler
 
-class Noise_RandomNoise:
-    def __init__(self, seed):
-        self.seed = seed
-
-    def generate_noise(self, input_latent):
-        latent_image = input_latent["samples"]
-        batch_inds = input_latent["batch_index"] if "batch_index" in input_latent else None
-        return comfy.sample.prepare_noise(latent_image, self.seed, batch_inds)
     
 def get_noise(noise_seed):
     noise = Noise_RandomNoise(noise_seed)
     return noise
+
+def get_noise_scaled(noise_seed, scale):
+    noise = Noise_RandomNoise_Scaled(noise_seed, scale)
+    return noise
+
+def disable_noise():
+    return Noise_EmptyNoise()
+
+def rescale_model_cfg(model, multiplier):
+    def rescale_cfg(args):
+        cond = args["cond"]
+        uncond = args["uncond"]
+        cond_scale = args["cond_scale"]
+        sigma = args["sigma"]
+        sigma = sigma.view(sigma.shape[:1] + (1,) * (cond.ndim - 1))
+        x_orig = args["input"]
+
+        #rescale cfg has to be done on v-pred model output
+        x = x_orig / (sigma * sigma + 1.0)
+        cond = ((x - (x_orig - cond)) * (sigma ** 2 + 1.0) ** 0.5) / (sigma)
+        uncond = ((x - (x_orig - uncond)) * (sigma ** 2 + 1.0) ** 0.5) / (sigma)
+
+        #rescalecfg
+        x_cfg = uncond + cond_scale * (cond - uncond)
+        ro_pos = torch.std(cond, dim=(1,2,3), keepdim=True)
+        ro_cfg = torch.std(x_cfg, dim=(1,2,3), keepdim=True)
+
+        x_rescaled = x_cfg * (ro_pos / ro_cfg)
+        x_final = multiplier * x_rescaled + (1.0 - multiplier) * x_cfg
+
+        return x_orig - (x - x_final * sigma / (sigma * sigma + 1.0) ** 0.5)
+
+    m = model.clone()
+    m.set_model_sampler_cfg_function(rescale_cfg)
+    return m
+    
+def encode(vae, image):
+    t = vae.encode(image[:,:,:,:3])
+    return {"samples":t}
+
+def decode(vae, samples):
+    images = vae.decode(samples["samples"])
+    if len(images.shape) == 5: #Combine batches
+        images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
+    return images

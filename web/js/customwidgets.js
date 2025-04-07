@@ -56,13 +56,13 @@ const getSeparationWidget = (widget, widgetName, separatorWidth = 32) => {
     };
 }
 
-const getWidget = (node, type, name, label, value = null, callback = null, options = null) =>{
+const getWidget = (node, type, name, label, value = null, callback = null, options = null, force_hidden = false) =>{
         /*
         I hate myself for doing this but since the widgets classes aren't exposed, 
         and creating a widget object isn't enough to ensure the right behaviour for the widget, 
         we have to create a widget of our chosing via the standard addWidget, clone its class, and then instantiate our widget from there
         */
-        let tempWidget = node.addWidget(type, name, value, callback, options);
+        let tempWidget = node.addWidget(type, name, value, callback, options, force_hidden);
         let WidgetClass = Object.getPrototypeOf(tempWidget).constructor;
         node.widgets.pop();
 
@@ -73,7 +73,8 @@ const getWidget = (node, type, name, label, value = null, callback = null, optio
         label: label,
         value: value,
         callback,
-        options: options || {}
+        options: options || {},
+        force_hidden: force_hidden || false
         };
         let widget = new WidgetClass(widgetTemplate);
         return widget;
@@ -145,6 +146,51 @@ const selectFile = (widget, accept = "image/jpeg, image/png, image/webp") => {
     fileInput.click();
 }
 
+const refreshFolder = async(node, widget_name, hidden_inputs, folder_name) => {
+    let body = {
+        folder_name: folder_name
+    }
+    const resp = await api.fetchApi("/refresh_folder_input", {
+        method: "POST",
+        body: JSON.stringify(body)
+    });
+    
+    const datas = await resp.json()
+
+    let folders = datas.datas.folders;
+
+    let nodes = app.graph._nodes;
+
+    for(let i = 0; i < nodes.length; i++){
+        let node = nodes[i];
+        let widget = node.widgets.find((w) => w.name == "target_folder" && folders.indexOf(folder_name+"/") >= 0)
+
+        if(widget)
+        {
+            console.log(widget)
+            const updated_folder_input = node.widgets.find((w) => widget_name === w.name);
+            updated_folder_input.value =  folders.indexOf(updated_folder_input.value) >= 0 ? updated_folder_input.value : folders[0]
+            updated_folder_input.options.values = folders;
+        }
+
+    }
+
+  /*  let node = nodes[event.detail.node_id];
+    if(node) {
+        const w = node.widgets.find((w) => event.detail.widget_name === w.name);
+        if(w) {
+            w.value = event.detail.value;
+        }
+    }
+
+    let pathToImageFolder = hidden_inputs['path_to_image_folder'][1]['default'];
+    console.log(pathToImageFolder)
+
+    const w = node.widgets.find((w) => widget_name === w.name);
+    w.value = "ok"
+    w.options.values = []
+    console.log(w)*/
+}
 
 //URL for null image
 const not_found_url = new URL("assets/no_image_found.ico", import.meta.url).href;
@@ -274,16 +320,40 @@ const imageUploadWidgetSection = (node, widget, widgetLabel, additionalWidgets =
     for(let i = 0; i < additionalWidgets.length; i++)
     {
         let additionalWidgetObject = additionalWidgets[i];
-        let additionalWidget = getWidget(node, additionalWidgetObject.type, additionalWidgetObject.name, additionalWidgetObject.label, additionalWidgetObject.defaultValue, additionalWidgetObject.callback, additionalWidgetObject.options);
+        let additionalWidget = getWidget(node, additionalWidgetObject.type, additionalWidgetObject.name, additionalWidgetObject.label, additionalWidgetObject.defaultValue, additionalWidgetObject.callback, additionalWidgetObject.options, additionalWidgetObject.force_hidden);
         additionals.push(additionalWidget);
     }
 
 	return {imageWidget, buttonWidget, toggleWidget, additionals}
 };
 
+const folderUploadWidgetSection = (node, widget, widgetLabel, additionalWidgets = []) =>  {
+
+	let buttonWidget = getWidget(node, "button", `upload_button_${widget.name}`, `REFRESH ${widgetLabel}`);
+
+    buttonWidget.initialize = function(callback){
+        this.callback = callback;
+    }
+
+    let toggleWidget = getWidget(node, "toggle", `enable_${widget.name}`, `enable ${widgetLabel.toLowerCase()}`, true)
+    toggleWidget.initialize = function(callback){
+        this.callback = callback;
+    }
+
+    let additionals = []
+
+    for(let i = 0; i < additionalWidgets.length; i++)
+    {
+        let additionalWidgetObject = additionalWidgets[i];
+        let additionalWidget = getWidget(node, additionalWidgetObject.type, additionalWidgetObject.name, additionalWidgetObject.label, additionalWidgetObject.defaultValue, additionalWidgetObject.callback, additionalWidgetObject.options, additionalWidgetObject.force_hidden);
+        additionals.push(additionalWidget);
+    }
+
+	return {buttonWidget, toggleWidget, additionals}
+};
+
 
 const promptWidgetSection = (node, widget, widgetLabel, additionalWidgets = []) =>  {
-    console.log(widget.value)
     let prompt_widget = addCustomTextWidget(node, `${widget.name}_conditionning`, {defaultVal: "", placeholder:"Describe the picture here. Use dynamic variables like '{clothes}' in 'text area' mode. Edit via 'URL_NOT_IMPLEMENTED_YET'.", dynamicPrompts: true, multiline: true}, 150);
     
     prompt_widget.initialize = function(callback){
@@ -300,7 +370,7 @@ const promptWidgetSection = (node, widget, widgetLabel, additionalWidgets = []) 
     for(let i = 0; i < additionalWidgets.length; i++)
     {
         let additionalWidgetObject = additionalWidgets[i];
-        let additionalWidget = getWidget(node, additionalWidgetObject.type, additionalWidgetObject.name, additionalWidgetObject.label, additionalWidgetObject.defaultValue, additionalWidgetObject.callback, additionalWidgetObject.options);
+        let additionalWidget = getWidget(node, additionalWidgetObject.type, additionalWidgetObject.name, additionalWidgetObject.label, additionalWidgetObject.defaultValue, additionalWidgetObject.callback, additionalWidgetObject.options, additionalWidgetObject.force_hidden);
         additionals.push(additionalWidget);
     }
 
@@ -352,6 +422,12 @@ const hideElements = (node, hide, elements) =>{
     {
         let element = elements[i];
 
+        if(element.force_hidden)
+        {
+            element.hidden = true;
+            continue;
+        }
+
         if(element.inputEl)
             element.hideElement = hide;
         else
@@ -393,7 +469,7 @@ const getWidgetAdditionalDatas = (inputs) => {
     return additionalDatas;
 }
 
-const addAdditionalCallbacks = (node) => {
+const addAdditionalCallbacksFawfluxencerNode = (node) => {
     const num_steps = node.widgets.find(w => w.name === "steps");
     const control_net_start_at = node.widgets.find(w => w.name === "control_net_start_at");
     const control_net_end_at = node.widgets.find(w => w.name === "control_net_end_at");
@@ -406,6 +482,19 @@ const addAdditionalCallbacks = (node) => {
         face_swap_step_start.value = Math.min(face_swap_step_start.value, value);
     }
 
+    control_net_start_at.callback = (value) => {
+        control_net_end_at.value = Math.max(value, control_net_end_at.value);
+    }
+
+    control_net_end_at.callback = (value) => {
+        control_net_start_at.value = Math.min(value, control_net_start_at.value);
+    }
+}
+
+const addAdditionalCallbacksImg2ImgFawfluencerNodeSDXL = (node) => {
+    const control_net_start_at = node.widgets.find(w => w.name === "control_net_start_at");
+    const control_net_end_at = node.widgets.find(w => w.name === "control_net_end_at");
+    
     control_net_start_at.callback = (value) => {
         control_net_end_at.value = Math.max(value, control_net_end_at.value);
     }
@@ -441,9 +530,32 @@ const addImageUploadWidget = (node, widget, widget_custom_data, i) =>
     return i;
 }
 
+const addFolderUploadWidget = (node, widget, widget_custom_data, hidden_inputs, i) => 
+{
+    let widgetLabel = widget.label.replace("_", " ").toUpperCase();
+    let separatorWidget = getSeparationWidget(widget, widgetLabel);
+    let {buttonWidget, toggleWidget, additionals} = folderUploadWidgetSection(node, widget, widgetLabel, widget_custom_data.additional_widgets ?? []);
+                            
+    let elementsToHide = [widget, buttonWidget]
+    elementsToHide = elementsToHide.concat(additionals)
+
+    i = insertWidgetBefore(node.widgets, separatorWidget, i);
+
+    if(widget_custom_data.is_optional)
+        i = insertWidgetBefore(node.widgets, toggleWidget, i, () => toggleWidget.initialize((value) => hideElements(node, !value, elementsToHide)));
+
+    i = insertWidgetAfter(node.widgets, buttonWidget, i, () => {buttonWidget.initialize(() => { refreshFolder(node, widget.name, hidden_inputs, "img_to_img_folder")})});
+
+    for(let a = 0; a < additionals.length; a++)
+        i = insertWidgetAfter(node.widgets, additionals[a], i);
+    
+    if(widget_custom_data.is_optional)
+        hideElementsOnLoad(node, toggleWidget, elementsToHide);
+    return i;
+}
+
 const addPromptWidget = (node, widget, widget_custom_data, i) => 
 {
-    console.log(widget_custom_data)
     let widgetLabel = widget.label.replace("_", " ").toUpperCase();
     let separatorWidget = getSeparationWidget(widget, widgetLabel);
     let {prompt_widget, toggleWidget, additionals, prompt_preview_widget, negative_prompt_widget} = promptWidgetSection(node, widget, widgetLabel, widget_custom_data.additional_widgets ?? []);
@@ -490,7 +602,7 @@ const addPromptWidget = (node, widget, widget_custom_data, i) =>
     return i;
 }
 
-function nodeFeedbackHandler(event) {
+function nodeUpdatePromptHandler(event) {
 	let nodes = app.graph._nodes_by_id;
 	let node = nodes[event.detail.node_id];
 	if(node) {
@@ -501,70 +613,103 @@ function nodeFeedbackHandler(event) {
 	}
 }
 
-export const checkAndAddCustomWidgets = () => {
+const addNodeCustomInputs = (nodeType, nodeData, callback = null) => {
+
+    let inputs = nodeData["input"]["required"];
+    let hidden_inputs = nodeData["input"]["hidden"];
+
+    const additionalDatas = getWidgetAdditionalDatas(inputs)
+
+    const originalOnNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+        originalOnNodeCreated?.apply(this, arguments);
+
+        //necessary to link the custom datas to the original widgets
+
+        console.log(this)
+        console.log(this.widgets)
+        let initial_widgets_index = 0;
+        for (let i = 0; i < this.widgets.length; i++) {
+
+            let widget_custom_data = additionalDatas[initial_widgets_index];
+            let widget = this.widgets[i];
+
+            initial_widgets_index++;
+            if(!widget_custom_data)
+                continue;
+
+            switch(widget_custom_data.widget_template){
+                case "file_upload":
+                    i = addImageUploadWidget(this, widget, widget_custom_data, i);
+                    break;
+                case "folder_upload":
+                    i = addFolderUploadWidget(this, widget, widget_custom_data, hidden_inputs, i);
+                    break;
+                case "prompt":
+                    i = addPromptWidget(this, widget, widget_custom_data, i);
+                    break;
+            }
+        }
+
+        
+        let button = this.addWidget("button", "DEBUG", null, () => {
+            console.log(this)
+            console.log("FOr Debug purpose");
+            console.log(this.widgets)
+            console.log(this.inputs)
+        });
+
+        if(callback)
+            callback(this);
+
+        let hidden_widgets = [];
+
+        for(let i  = 0; i < this.widgets.length; i++)
+        {
+            let widget = this.widgets[i];
+
+            if(widget.force_hidden)
+                hidden_widgets.push(widget);
+        }
+
+        hideElements(this, false, hidden_widgets);
+    }
+}
+
+const registerNode = (extension) => {
     app.registerExtension({
-        name: "Fawfulized.jsnodes",
+        name: "Fawfulized."+extension.extensionName,
 
         //registering fawfulized-feedback so we can set the values of the widgets from the server
         async setup() {
-            app.api.addEventListener("fawfulized-feedback", nodeFeedbackHandler);
+            if(extension.setupCallback)
+                extension.setupCallback();
         },
 
         //adding custom widgets/inputs
         async beforeRegisterNodeDef(nodeType, nodeData, app) {
 
-            if (!nodeData?.category?.startsWith("Fawfulized")) {
+            if (!nodeData?.category?.startsWith("Fawfulized") || nodeData.name !== extension.extensionName) {
                 return;
             }
-            
-
-            
-
-            let inputs = nodeData["input"]["required"];
-            const additionalDatas = getWidgetAdditionalDatas(inputs)
-
-            switch (nodeData.name) {
-                case "FawfluxencerNode":
-                    const originalOnNodeCreated = nodeType.prototype.onNodeCreated;
-                    nodeType.prototype.onNodeCreated = function () {
-                        originalOnNodeCreated?.apply(this, arguments);
-
-                        //necessary to link the custom datas to the original widgets
-                        let initial_widgets_index = 0;
-                        for (let i = 0; i < this.widgets.length; i++) {
-
-                            let widget_custom_data = additionalDatas[initial_widgets_index];
-                            let widget = this.widgets[i];
-
-                            initial_widgets_index++;
-                            if(!widget_custom_data)
-                                continue;
-
-                            switch(widget_custom_data.widget_template){
-                                case "file_upload":
-                                    i = addImageUploadWidget(this, widget, widget_custom_data, i);
-                                    break;
-
-                                case "prompt":
-                                    i = addPromptWidget(this, widget, widget_custom_data, i);
-                                    break;
-                            }
-                        }
-
-                        
-                        let button = this.addWidget("button", "DEBUG", null, () => {
-                            console.log(this)
-                            console.log("FOr Debug purpose");
-                            console.log(this.widgets)
-                            console.log(this.inputs)
-                        });
-
-                        addAdditionalCallbacks(this);
-                    }
-                    break;
-    
-            }
-
+            console.log("ok..")
+            addNodeCustomInputs(nodeType, nodeData, extension.additionalCallback);
         },
     });
+}
+
+export const checkAndAddCustomWidgets = () => {
+
+    const FawfluxencerNode = {
+        extensionName : "FawfluxencerNode",
+        setupCallback : () => app.api.addEventListener("fawfulized-prompt-update", nodeUpdatePromptHandler),
+        additionalCallback: (node) => addAdditionalCallbacksFawfluxencerNode(node)
+    }
+
+    const Img2ImgFawfluencerNodeSDXL = {
+        extensionName : "Img2ImgFawfluencerNodeSDXL",
+        additionalCallback: (node) => addAdditionalCallbacksImg2ImgFawfluencerNodeSDXL(node)
+    }
+    registerNode(FawfluxencerNode);
+    registerNode(Img2ImgFawfluencerNodeSDXL);
 }

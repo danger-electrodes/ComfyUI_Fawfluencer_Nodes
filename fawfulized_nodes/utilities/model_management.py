@@ -68,15 +68,16 @@ def load_model(model_name, repo_id, filename=None, revision=None):
     model_folder = get_model_folder(model_name)
     model_path = os.path.join(model_folder, repo_id)
 
-    if(filename is not None):
-        model_path = os.path.join(model_path, filename, filename)
-
     if not os.path.exists(model_path):
         if(filename is None):
             snapshot_download(repo_id=repo_id, local_dir=model_path, local_dir_use_symlinks=False, revision=revision)
         else:
             hf_hub_download(repo_id=repo_id, local_dir=model_path, local_dir_use_symlinks=False, filename=filename, revision=revision)
 
+    if(filename is not None):
+        model_path = os.path.join(model_path, filename)
+    
+    print(model_path)
     return model_path
 
 def download_insightface_model(root, sub_dir, name, force=False):
@@ -960,6 +961,36 @@ def apply_ip_adapter(model, ipadapter_model, clip_vision_model, image, weight, s
             model = apply_ip_adapter_flux(model, ipadapter_model, image, weight)
 
     return model
+
+def load_instant_id_model():
+        from .instant_id import InstantID
+        ckpt_path = load_model("InstantID", "InstantX/InstantID", "ip-adapter.bin")
+
+        model = comfy.utils.load_torch_file(ckpt_path, safe_load=True)
+
+        if ckpt_path.lower().endswith(".safetensors"):
+            st_model = {"image_proj": {}, "ip_adapter": {}}
+            for key in model.keys():
+                if key.startswith("image_proj."):
+                    st_model["image_proj"][key.replace("image_proj.", "")] = model[key]
+                elif key.startswith("ip_adapter."):
+                    st_model["ip_adapter"][key.replace("ip_adapter.", "")] = model[key]
+            model = st_model
+
+        model = InstantID(
+            model,
+            cross_attention_dim=1280,
+            output_cross_attention_dim=model["ip_adapter"]["1.to_k_ip.weight"].shape[1],
+            clip_embeddings_dim=512,
+            clip_extra_context_tokens=16,
+        )
+
+        return model
+
+def load_instant_id_controlnet_model():
+    control_net_path = load_model("InstantID_Controlnet", "InstantX/InstantID", "ControlNetModel/diffusion_pytorch_model.safetensors")
+    controlnet = comfy.controlnet.load_controlnet(control_net_path)
+    return controlnet
 
 def unload_models():
     comfy.model_management.unload_all_models()

@@ -1,3 +1,9 @@
+from .custom_routes import add_custom_routes
+from .upgrade_deps import deps_upgrade
+
+add_custom_routes()
+deps_upgrade()
+
 from .fawfulized_nodes.fawfunyuan_custom_nodes import (
     FawfulizedHunyuanSamplerCustom,
     FawfulizedHunyuanBasicScheduler,
@@ -32,6 +38,7 @@ from .fawfulized_nodes.fawfunyuan_custom_nodes import (
 
 from .fawfulized_nodes.fawfluxencer_node import FawfluxencerNode
 from .fawfulized_nodes.fawface_model_spreadsheet_realism_node import FawfaceModelSpreadsheetRealismNode
+from .fawfulized_nodes.img2img_fawfluencer_node_sdxl import Img2ImgFawfluencerNodeSDXL
 
 from .fawfulized_nodes.fawfake_authentic_image_save_node import FawfakeAuthenticImageSaveNode
 from .fawfulized_nodes.empty_image_list import FawfulizedEmptyImageList
@@ -49,6 +56,7 @@ from .fawfulized_nodes.fawfunyuan_set_latent_noise_mask import FawfulizedHunyuan
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
 NODE_CLASS_MAPPINGS = {
+    "Img2ImgFawfluencerNodeSDXL": Img2ImgFawfluencerNodeSDXL,
     "FawfakeAuthenticImageSaveNode": FawfakeAuthenticImageSaveNode,
     "FawfluxencerNode": FawfluxencerNode,
     "FawfaceModelSpreadsheetRealismNode": FawfaceModelSpreadsheetRealismNode,
@@ -96,6 +104,7 @@ NODE_CLASS_MAPPINGS = {
  
 # A dictionary that contains the friendly/humanly readable titles for the nodes
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "Img2ImgFawfluencerNodeSDXL" : "Img2Img Fawfluencer Node (SDXL)",
     "FawfakeAuthenticImageSaveNode": "Fawfake Authentic Image Save Node",
     "FawfluxencerNode": "Fawfluxencer Node",
     "FawfaceModelSpreadsheetRealismNode" : "Fawface Model Spreadsheet Realism Node",

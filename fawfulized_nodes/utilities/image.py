@@ -185,6 +185,59 @@ if "rembg" not in packages():
 from rembg import remove, new_session
 
 
+def load_image_from_path(image_path):
+    img = node_helpers.pillow(Image.open, image_path)
+
+    output_images = []
+    output_masks = []
+    w, h = None, None
+
+    excluded_formats = ['MPO']
+
+    for i in ImageSequence.Iterator(img):
+        i = node_helpers.pillow(ImageOps.exif_transpose, i)
+
+        if i.mode == 'I':
+            i = i.point(lambda i: i * (1 / 255))
+        image = i.convert("RGB")
+
+        if len(output_images) == 0:
+            w = image.size[0]
+            h = image.size[1]
+
+        if image.size[0] != w or image.size[1] != h:
+            continue
+
+        image = np.array(image).astype(np.float32) / 255.0
+        image = torch.from_numpy(image)[None,]
+        if 'A' in i.getbands():
+            mask = np.array(i.getchannel('A')).astype(np.float32) / 255.0
+            mask = 1. - torch.from_numpy(mask)
+        else:
+            mask = torch.zeros((64,64), dtype=torch.float32, device="cpu")
+        output_images.append(image)
+        output_masks.append(mask.unsqueeze(0))
+
+    if len(output_images) > 1 and img.format not in excluded_formats:
+        output_image = torch.cat(output_images, dim=0)
+        output_mask = torch.cat(output_masks, dim=0)
+    else:
+        output_image = output_images[0]
+        output_mask = output_masks[0]
+
+    return output_image, output_mask
+
+def load_image_from_path_multiple(images_paths):
+    images = []
+    masks = []
+
+    for i in range(len(images_paths)):
+        path = images_paths[i]
+        img, msk = load_image_from_path(path)
+        images.append(img)
+        masks.append(msk)
+
+    return images, masks
 
 def load_image(image):
     image_path = folder_paths.get_annotated_filepath(image)
@@ -235,6 +288,9 @@ def get_empty_latent(width, height, batch):
     latent = {"samples":samples}
     return latent
 
+def set_latent_noise_mask(samples, mask):
+    samples["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
+    return samples
 
 def upscale_latent_by(samples, upscale_method, scale_by):
     s = samples.copy()
@@ -521,3 +577,15 @@ def resize_image_any(image, width, height, bg_color = (0, 0, 0)):
     pil_image_resized = resize_image(pil_image, width, height, bg_color)
     resized_image = pil2tensor(pil_image_resized)
     return resized_image
+
+def get_inverse_mask(mask):
+    inverse_mask = 1.0 - mask
+    return inverse_mask
+
+def set_mask_strength(mask, strength):
+    new_mask = mask * strength
+    return new_mask
+
+def combine_mask(mask1, mask2):
+    combined_mask = mask1 + mask2
+    return combined_mask

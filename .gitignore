@@ -1,4 +1,5 @@
 fawfulized_nodes/models/
+img_to_img_folder/
 **/__pycache__/
 *.pyc
 *.pyo
