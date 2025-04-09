@@ -4,8 +4,24 @@ import os
 from .utilities import model_management as model_management_utilities
 
 bboxs_model_path = model_management_utilities.load_model("ultralytics", "bbox")
-
 BBOX_MODELS = [f for f in os.listdir(bboxs_model_path)]
+
+IP_ADAPTER_WEIGHT_TYPES = [
+    "linear",
+    "ease in",
+    "ease out",
+    "reverse in-out",
+    "weak input",
+    "weak output",
+    "weak middle",
+    "strong middle",
+    "style transfer",
+    "composition",
+    "strong style transfer",
+    "style and composition",
+    "style transfer precise",
+    "composition precise",
+]
 
 LIGHTS = [
     {
@@ -426,6 +442,15 @@ IMG2IMG_INFLUENCER_FACE_CUSTOM_DATAS = {
                                 "max": 1.00,
                                 "precision": 2,
                                 "step": 0.01,
+                            }
+                        },
+                        {
+                            "type" : "combo",
+                            "name" : "instantid_face_selection_type",
+                            "label" : "instantid face selection type :",
+                            "defaultValue": "combine faces",
+                            "options": {
+                                "values": ["combine faces", "best face rotation"]
                             }
                         },
                         {

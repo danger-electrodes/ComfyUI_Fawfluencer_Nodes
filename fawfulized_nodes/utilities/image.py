@@ -15,6 +15,11 @@ import subprocess
 import scipy.ndimage
 import math
 
+try:
+    import torchvision.transforms.v2 as T
+except ImportError:
+    import torchvision.transforms as T
+
 MODELS_DIR =  folder_paths.models_dir
 
 class cstr(str):
@@ -589,3 +594,101 @@ def set_mask_strength(mask, strength):
 def combine_mask(mask1, mask2):
     combined_mask = mask1 + mask2
     return combined_mask
+
+def min_(tensor_list):
+    # return the element-wise min of the tensor list.
+    x = torch.stack(tensor_list)
+    mn = x.min(axis=0)[0]
+    return torch.clamp(mn, min=0)
+
+def max_(tensor_list):
+    # return the element-wise max of the tensor list.
+    x = torch.stack(tensor_list)
+    mx = x.max(axis=0)[0]
+    return torch.clamp(mx, max=1)
+
+def contrast_adaptive_sharpening(image, amount):
+    img = T.functional.pad(image, (1, 1, 1, 1)).cpu()
+
+    a = img[..., :-2, :-2]
+    b = img[..., :-2, 1:-1]
+    c = img[..., :-2, 2:]
+    d = img[..., 1:-1, :-2]
+    e = img[..., 1:-1, 1:-1]
+    f = img[..., 1:-1, 2:]
+    g = img[..., 2:, :-2]
+    h = img[..., 2:, 1:-1]
+    i = img[..., 2:, 2:]
+
+    # Computing contrast
+    cross = (b, d, e, f, h)
+    mn = min_(cross)
+    mx = max_(cross)
+
+    diag = (a, c, g, i)
+    mn2 = min_(diag)
+    mx2 = max_(diag)
+    mx = mx + mx2
+    mn = mn + mn2
+
+    # Computing local weight
+    inv_mx = torch.reciprocal(mx)
+    amp = inv_mx * torch.minimum(mn, (2 - mx))
+
+    # scaling
+    amp = torch.sqrt(amp)
+    w = - amp * (amount * (1/5 - 1/8) + 1/8)
+    div = torch.reciprocal(1 + 4*w)
+
+    output = ((b + d + f + h)*w + e) * div
+    output = torch.nan_to_num(output)
+    output = output.clamp(0, 1)
+
+    return output
+
+def prepare_image_for_clipvision(image, interpolation="LANCZOS", crop_position="center", sharpening=0.0):
+    size = (224, 224)
+    _, oh, ow, _ = image.shape
+    output = image.permute([0,3,1,2])
+
+    if crop_position == "pad":
+        if oh != ow:
+            if oh > ow:
+                pad = (oh - ow) // 2
+                pad = (pad, 0, pad, 0)
+            elif ow > oh:
+                pad = (ow - oh) // 2
+                pad = (0, pad, 0, pad)
+            output = T.functional.pad(output, pad, fill=0)
+    else:
+        crop_size = min(oh, ow)
+        x = (ow-crop_size) // 2
+        y = (oh-crop_size) // 2
+        if "top" in crop_position:
+            y = 0
+        elif "bottom" in crop_position:
+            y = oh-crop_size
+        elif "left" in crop_position:
+            x = 0
+        elif "right" in crop_position:
+            x = ow-crop_size
+
+        x2 = x+crop_size
+        y2 = y+crop_size
+
+        output = output[:, :, y:y2, x:x2]
+
+    imgs = []
+    for img in output:
+        img = T.ToPILImage()(img) # using PIL for better results
+        img = img.resize(size, resample=Image.Resampling[interpolation])
+        imgs.append(T.ToTensor()(img))
+    output = torch.stack(imgs, dim=0)
+    del imgs, img
+
+    if sharpening > 0:
+        output = contrast_adaptive_sharpening(output, sharpening)
+
+    output = output.permute([0,2,3,1])
+
+    return output
