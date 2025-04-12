@@ -1,0 +1,14 @@
+[project]
+name = "fawfluencer_nodes"
+description = "A set of node for ComfyUI to create an influencer"
+version = "1.0.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/danger-electrodes/ComfyUI_Fawfluencer_Nodes"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI_Fawfluencer_Nodes"
+Icon = ""
