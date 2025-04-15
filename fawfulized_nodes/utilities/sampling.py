@@ -83,6 +83,12 @@ def encode_text(clip, text, neg_text, flux_guidance = None):
 
 
 def sample(noise, guider, sampler, sigmas, latent_image):
+
+    empty_sigma = torch.numel(sigmas[0]) == 0
+
+    if(empty_sigma):
+        return latent_image, latent_image
+    
     # Ensure latent is a fresh copy
     latent = copy.deepcopy(latent_image)  # Deep copy to prevent reference leaks
     latent_image = latent["samples"]

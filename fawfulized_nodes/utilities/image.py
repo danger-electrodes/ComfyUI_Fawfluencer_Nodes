@@ -297,6 +297,10 @@ def set_latent_noise_mask(samples, mask):
     samples["noise_mask"] = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1]))
     return samples
 
+def remove_latent_noise_mask(samples):
+    result = {key: value for key, value in samples.items() if key != 'noise_mask'}
+    return result
+
 def upscale_latent_by(samples, upscale_method, scale_by):
     s = samples.copy()
     width = round(samples["samples"].shape[-1] * scale_by)
@@ -311,6 +315,38 @@ def upscale_image_by(image, upscale_method, scale_by):
     s = comfy.utils.common_upscale(samples, width, height, upscale_method, "disabled")
     s = s.movedim(1,-1)
     return s
+
+def nn_upscale_latent_by(latent, scale_by, model, scale_factor=0.13025, attempt=10):
+    dtype = torch.float32
+    if comfy.model_management.should_use_fp16():
+        dtype = torch.float16
+
+    device = comfy.model_management.get_torch_device()
+
+    # Retry loop
+    for i in range(attempt):
+        try:
+            samples = latent["samples"].to(device=device, dtype=dtype)
+            model = model.to(device)  # Make sure model is also on the same device
+
+            latent_out = model(scale_factor * samples, scale=scale_by) / scale_factor
+
+            if dtype != torch.float32:
+                latent_out = latent_out.to(dtype=torch.float32)
+
+            latent_out = latent_out.to(device="cpu")
+
+            model.to(device=comfy.model_management.vae_offload_device())
+            return {"samples": latent_out}
+
+        except RuntimeError as e:
+            if "Expected all tensors to be on the same device" in str(e):
+                print(f"[Attempt {i+1}/{attempt}] Device mismatch error, retrying...")
+                continue  # Try again
+            else:
+                raise  # Let other errors bubble up
+
+    raise RuntimeError(f"Failed after {attempt} attempts due to persistent device mismatch.")
 
 def resize(image, width, height, upscale_method="lanczos"):
     B, H, W, C = image.shape
@@ -589,6 +625,11 @@ def get_inverse_mask(mask):
 
 def set_mask_strength(mask, strength):
     new_mask = mask * strength
+    return new_mask
+
+def create_full_mask(img, strength):
+    #an image tensor is of the shape BHWC, we will use the dimensions of the image to create the mask, then multiply the mask by strength
+    new_mask = torch.ones_like(img) * strength
     return new_mask
 
 def combine_mask(mask1, mask2):

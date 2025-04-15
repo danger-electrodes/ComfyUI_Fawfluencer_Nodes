@@ -17,11 +17,12 @@ from .pulid import load_pulid_model_patcher, apply_pulid
 from .ic_light import ICLight
 from .ic_light_convert_unet import convert_iclight_unet
 from .ic_light_patches import calculate_weight_adjust_channel
-from comfy.utils import load_torch_file
+from comfy.utils import load_torch_file, state_dict_prefix_replace
 import zipfile
 import folder_paths
 from .detectors import load_yolo, UltraBBoxDetector
 from .grounding_dino.util.slconfig import SLConfig as local_groundingdino_SLConfig
+from spandrel import ModelLoader, ImageModelDescriptor
 from comfy import lora
 import types
 import glob
@@ -991,6 +992,62 @@ def load_instant_id_controlnet_model():
     control_net_path = load_model("InstantID_Controlnet", "InstantX/InstantID", "ControlNetModel/diffusion_pytorch_model.safetensors")
     controlnet = comfy.controlnet.load_controlnet(control_net_path)
     return controlnet
+
+def load_sdxl_latent_resize_model():
+    from .latent_resizer import LatentResizer
+
+    dtype = torch.float32
+    if comfy.model_management.should_use_fp16():
+        dtype = torch.float16
+
+    device = comfy.model_management.get_torch_device()
+    resizer_model_path = load_model("latent_resizers", "fawfulized/resizers", "sdxl_resizer.pt")
+    model = LatentResizer.load_model(resizer_model_path, device, dtype)
+    
+    return model
+
+def load_sharpen_upscale_model():
+    upscale_model_path = load_model("upscale_model", "lokCX/4x-Ultrasharp", "4x-UltraSharp.pth")
+    upscale_model = load_torch_file(upscale_model_path, safe_load=True)
+
+    if "module.layers.0.residual_group.blocks.0.norm1.weight" in upscale_model:
+        upscale_model = state_dict_prefix_replace(upscale_model, {"module.":""})
+    model = ModelLoader().load_from_state_dict(upscale_model).eval()
+
+    if not isinstance(model, ImageModelDescriptor):
+        raise Exception("Upscale model must be a single-image model.")
+    
+    return model
+
+def apply_upscale_model(upscale_model, image):
+    device = comfy.model_management.get_torch_device()
+
+    memory_required = comfy.model_management.module_size(upscale_model.model)
+    memory_required += (512 * 512 * 3) * image.element_size() * max(upscale_model.scale, 1.0) * 384.0 #The 384.0 is an estimate of how much some of these models take, TODO: make it more accurate
+    memory_required += image.nelement() * image.element_size()
+    comfy.model_management.free_memory(memory_required, device)
+
+    upscale_model.to(device)
+    in_img = image.movedim(-1,-3).to(device)
+
+    tile = 512
+    overlap = 32
+
+    oom = True
+    while oom:
+        try:
+            steps = in_img.shape[0] * comfy.utils.get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)
+            pbar = comfy.utils.ProgressBar(steps)
+            upscaled_image = comfy.utils.tiled_scale(in_img, lambda a: upscale_model(a), tile_x=tile, tile_y=tile, overlap=overlap, upscale_amount=upscale_model.scale, pbar=pbar)
+            oom = False
+        except comfy.model_management.OOM_EXCEPTION as e:
+            tile //= 2
+            if tile < 128:
+                raise e
+
+    upscale_model.to("cpu")
+    upscaled_image = torch.clamp(upscaled_image.movedim(-3,-1), min=0, max=1.0)
+    return upscaled_image
 
 def unload_models():
     comfy.model_management.unload_all_models()

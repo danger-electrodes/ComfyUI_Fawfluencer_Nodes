@@ -82,7 +82,6 @@ const getWidget = (node, type, name, label, value = null, callback = null, optio
 
 const uploadFile = async(widget, file) =>{
     try{
-        console.log(widget);
         const body = new FormData();
         body.append("image", file);
     

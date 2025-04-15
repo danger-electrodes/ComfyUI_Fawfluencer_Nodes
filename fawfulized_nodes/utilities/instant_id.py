@@ -444,8 +444,9 @@ def apply_instantid(instantid, insightface, control_net, image, model, positive,
 
     return work_model, cond_uncond[0], cond_uncond[1]
 
-def get_instantid_conditionning(insightface, image, control_net, cn_strength, start_at, end_at, positive, negative, image_prompt_embeds, uncond_image_prompt_embeds, mask=None, image_kps=None):
+def get_instantid_conditionning(insightface, image, control_net, weight, start_at, end_at, positive, negative, image_prompt_embeds, uncond_image_prompt_embeds, mask=None, image_kps=None, cn_strength=None):
     
+    cn_strength = weight if cn_strength is None else cn_strength
     # if no keypoints image is provided, use the image itself (only the first one in the batch)
     face_kps = extractFeatures(insightface, image_kps if image_kps is not None else image[0].unsqueeze(0), extract_kps=True)
 

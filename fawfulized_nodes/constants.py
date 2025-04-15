@@ -6,6 +6,17 @@ from .utilities import model_management as model_management_utilities
 bboxs_model_path = model_management_utilities.load_model("ultralytics", "bbox")
 BBOX_MODELS = [f for f in os.listdir(bboxs_model_path)]
 
+INSTANT_ID_COMBINE_EMBEDDINGS = [
+    "average", 
+    "norm average", 
+    "concat"
+]
+
+INSTANT_ID_FACE_SELECTION_TYPE = [
+    "combine faces", 
+    "best face rotation"
+]
+
 IP_ADAPTER_WEIGHT_TYPES = [
     "linear",
     "ease in",
@@ -400,6 +411,12 @@ IMG2IMG_INFLUENCER_FACE_CUSTOM_DATAS = {
     "is_optional" : False,
     "additional_widgets" : [
                         {
+                            "type" : "toggle",
+                            "name" : "use_advanced_instant_id",
+                            "label" : "use advanced instant id :",
+                            "defaultValue": True,
+                        },
+                        {
                             "type" : "combo",
                             "name" : "insight_face_provider",
                             "label" : "provider for insightface :",
@@ -450,7 +467,7 @@ IMG2IMG_INFLUENCER_FACE_CUSTOM_DATAS = {
                             "label" : "instantid face selection type :",
                             "defaultValue": "combine faces",
                             "options": {
-                                "values": ["combine faces", "best face rotation"]
+                                "values": INSTANT_ID_FACE_SELECTION_TYPE
                             }
                         },
                         {
@@ -459,7 +476,7 @@ IMG2IMG_INFLUENCER_FACE_CUSTOM_DATAS = {
                             "label" : "instantid combine embeddings :",
                             "defaultValue": "average",
                             "options": {
-                                "values": ["average", "norm average", "concat"]
+                                "values": INSTANT_ID_COMBINE_EMBEDDINGS 
                             }
                         },
                         {
